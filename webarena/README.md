@@ -61,7 +61,7 @@ python run.py --task_name "webarena.0" # switch task id from 0 to 811
 
 You can check the results in `./results/...webarena.0.../`.
 
-### with Agent Task Memory :atm:
+### with Agent Workflow Memory
 
 **Step 1**. To run inference on a task:
 
