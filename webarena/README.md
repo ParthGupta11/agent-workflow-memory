@@ -20,13 +20,13 @@ Set up the web servers and environment URLs (find more details in the [webarena 
 
 ```bash
 BASE_URL=<YOUR_SERVER_URL_HERE>
-export WA_SHOPPING="$BASE_URL:7770/"
-export WA_SHOPPING_ADMIN="$BASE_URL:7780/admin"
-export WA_REDDIT="$BASE_URL:9999"
-export WA_GITLAB="$BASE_URL:8023"
-export WA_WIKIPEDIA="$BASE_URL:8888/wikipedia_en_all_maxi_2022-05/A/User:The_other_Kiwix_guy/Landing"
-export WA_MAP="$BASE_URL:3000"
-export WA_HOMEPAGE="$BASE_URL:4399"
+export SHOPPING="$BASE_URL:7770/"
+export SHOPPING_ADMIN="$BASE_URL:7780/admin"
+export REDDIT="$BASE_URL:9999"
+export GITLAB="$BASE_URL:8023"
+export WIKIPEDIA="$BASE_URL:8888/wikipedia_en_all_maxi_2022-05/A/User:The_other_Kiwix_guy/Landing"
+export MAP="$BASE_URL:3000"
+export HOMEPAGE="$BASE_URL:4399"
 ```
 
 Then, generate the config files for each task, which will be used during workflow induction.
@@ -78,14 +78,14 @@ Remember to match the workflow path with the associated tasks of the input id. B
 python -m autoeval.evaluate_trajectory --result_dir "../results/webarena.0"
 ```
 
-This will produce a "{model}_autoeval.txt" in the "../results/webarena.0/" directory.
+This will produce a "{model}_autoeval.json" in the "../results/webarena.0/" directory.
 
 Change the `model` and `prompt` format options if necessary.
 
 **Step 3**. Integrate the trajectory workflows to agent memory
 
 ```bash
-python induce_rule.py --results_dir results/shopping
+python induce_rule.py --result_dir results
 # or `induce_prompt.py` for neural-based induction
 ```
 
