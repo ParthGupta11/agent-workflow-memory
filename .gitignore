@@ -3,3 +3,7 @@
 webarena/config_files/**
 webarena/autoeval/log
 **/.DS_Store
+
+# Ignore local environment setup scripts
+api_setup.sh
+export_webarena.sh

@@ -12,6 +12,22 @@ from agents.legacy.agent import GenericAgentArgs
 from agents.legacy.dynamic_prompting import Flags
 from agents.legacy.utils.chat_api import ChatModelArgs
 
+import openai
+
+# Save the original API call
+original_create = openai.resources.chat.completions.Completions.create
+
+
+# Define a trap that swaps any 'gpt' model request to Gemini
+def patched_create(*args, **kwargs):
+    if "model" in kwargs and "gpt" in kwargs["model"]:
+        kwargs["model"] = "google/gemini-2.5-pro"
+    return original_create(*args, **kwargs)
+
+
+# Apply the trap to the OpenAI client
+openai.resources.chat.completions.Completions.create = patched_create
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -45,7 +61,10 @@ def parse_args():
         help="Starting URL (only for the openended task).",
     )
     parser.add_argument(
-        "--slow_mo", type=int, default=30, help="Slow motion delay for the playwright actions."
+        "--slow_mo",
+        type=int,
+        default=30,
+        help="Slow motion delay for the playwright actions.",
     )
     parser.add_argument(
         "--headless",
@@ -60,7 +79,10 @@ def parse_args():
         help="Add visual effects when the agents performs actions.",
     )
     parser.add_argument(
-        "--use_html", type=str2bool, default=False, help="Use HTML in the agent's observation space."
+        "--use_html",
+        type=str2bool,
+        default=False,
+        help="Use HTML in the agent's observation space.",
     )
     parser.add_argument(
         "--use_ax_tree",
@@ -75,13 +97,24 @@ def parse_args():
         help="Use screenshot in the agent's observation space.",
     )
     parser.add_argument(
-        "--multi_actions", type=str2bool, default=True, help="Allow multi-actions in the agent."
+        "--multi_actions",
+        type=str2bool,
+        default=True,
+        help="Allow multi-actions in the agent.",
     )
     parser.add_argument(
         "--action_space",
         type=str,
         default="bid",
-        choices=["python", "bid", "coord", "bid+coord", "bid+nav", "coord+nav", "bid+coord+nav"],
+        choices=[
+            "python",
+            "bid",
+            "coord",
+            "bid+coord",
+            "bid+nav",
+            "coord+nav",
+            "bid+coord+nav",
+        ],
         help="",
     )
     parser.add_argument(

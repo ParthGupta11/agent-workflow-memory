@@ -71,10 +71,15 @@ class ChatModelArgs:
             raise ValueError("model_url cannot be specified when hf_hosted is True")
 
     def make_chat_model(self):
-        if self.model_name.startswith("openai"):
-            _, model_name = self.model_name.split("/")
+        if "google" in self.model_name:
+            return VertexAIChatModel(
+                model_name=self.model_name,
+                temperature=self.temperature,
+                max_new_tokens=self.max_new_tokens,
+            )
+        elif self.model_name.startswith("openai"):
             return ChatOpenAI(
-                model_name=model_name,
+                model_name=self.model_name.split("/")[-1],
                 temperature=self.temperature,
                 max_tokens=self.max_new_tokens,
             )
@@ -103,11 +108,76 @@ class ChatModelArgs:
 
     def has_vision(self):
         # TODO make sure to upgrade this as we add more models
-        name_patterns_with_vision = [
-            "vision",
-            "4o",
-        ]
+        name_patterns_with_vision = ["vision", "4o"]
         return any(pattern in self.model_name for pattern in name_patterns_with_vision)
+
+
+class VertexAIChatModel(SimpleChatModel):
+    """Custom Native Vertex AI Chatbot to bypass LangChain bugs."""
+
+    model_name: str
+    temperature: float
+    max_new_tokens: Optional[int] = None
+
+    def _call(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> str:
+        import os
+        import vertexai
+        from vertexai.generative_models import (
+            GenerativeModel,
+            HarmCategory,
+            HarmBlockThreshold,
+            Content,
+            Part,
+        )
+
+        # 1. Initialize Native SDK
+        project = os.environ.get("PROJECT_ID", "awm-baseline")
+        location = os.environ.get("LOCATION", "us-central1")
+        vertexai.init(project=project, location=location)
+
+        # 2. Parse Messages
+        contents = []
+        sys_instructions = []
+        for msg in messages:
+            if msg.type == "system":
+                sys_instructions.append(msg.content)
+            else:
+                role = "user" if msg.type in ["human", "user"] else "model"
+                contents.append(Content(role=role, parts=[Part.from_text(msg.content)]))
+
+        system_instruction = "\n".join(sys_instructions) if sys_instructions else None
+
+        # 3. Load Model with Safety Disabled
+        model = GenerativeModel(
+            model_name=self.model_name.split("/")[-1],
+            system_instruction=system_instruction,
+        )
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+        }
+
+        # 4. Generate
+        response = model.generate_content(
+            contents,
+            generation_config={
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_new_tokens,
+            },
+            safety_settings=safety_settings,
+        )
+        return response.text
+
+    def _llm_type(self) -> str:
+        return "vertexai"
 
 
 class HuggingFaceChatModel(SimpleChatModel):
@@ -193,7 +263,9 @@ class HuggingFaceChatModel(SimpleChatModel):
             logging.info("Loading the LLM from a URL")
             client = InferenceClient(model=model_url, token=eai_token)
             self.llm = partial(
-                client.text_generation, temperature=temperature, max_new_tokens=max_new_tokens
+                client.text_generation,
+                temperature=temperature,
+                max_new_tokens=max_new_tokens,
             )
         elif hf_hosted:
             logging.info("Serving the LLM on HuggingFace Hub")
@@ -224,7 +296,9 @@ class HuggingFaceChatModel(SimpleChatModel):
 
         if self.tokenizer:
             messages_formated = _convert_messages_to_dict(messages)
-            prompt = self.tokenizer.apply_chat_template(messages_formated, tokenize=False)
+            prompt = self.tokenizer.apply_chat_template(
+                messages_formated, tokenize=False
+            )
 
         elif self.prompt_template:
             prompt = self.prompt_template.construct_prompt(messages)

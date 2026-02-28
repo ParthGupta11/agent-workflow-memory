@@ -131,7 +131,9 @@ def retry_parallel(chat: ChatOpenAI, messages, n_retry, parser):
 
     for i in range(n_retry):
         try:
-            answers = chat.generate([messages]).generations[0]  # chat.n parallel completions
+            answers = chat.generate([messages]).generations[
+                0
+            ]  # chat.n parallel completions
         except BadRequestError as e:
             # most likely, the added messages triggered a message too long error
             # we thus retry without the last two messages
@@ -174,7 +176,10 @@ def truncate_tokens(text, max_tokens=8000, start=0, model_name="gpt-4"):
 
 @cache
 def get_tokenizer(model_name="openai/gpt-4"):
-    if model_name.startswith("openai"):
+    if "google" in model_name:
+        # Force the default encoder to bypass the strict OpenAI model dictionary
+        return tiktoken.get_encoding("cl100k_base")
+    elif model_name.startswith("openai"):
         return tiktoken.encoding_for_model(model_name.split("/")[-1])
     else:
         return AutoTokenizer.from_pretrained(model_name)
@@ -394,7 +399,9 @@ class ChatCached:
 
     def __init__(self, chat, memory=None):
         self.chat = chat
-        self.memory = memory if memory else Memory(location=Path.home() / "llm-cache", verbose=10)
+        self.memory = (
+            memory if memory else Memory(location=Path.home() / "llm-cache", verbose=10)
+        )
         self._call = self.memory.cache(self.chat.__call__, ignore=["self"])
         self._generate = self.memory.cache(self.chat.generate, ignore=["self"])
 

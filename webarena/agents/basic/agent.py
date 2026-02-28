@@ -1,3 +1,4 @@
+import os
 import dataclasses
 
 from browsergym.experiments import Agent, AbstractAgentArgs
@@ -7,17 +8,14 @@ from browsergym.utils.obs import flatten_axtree_to_str
 
 
 class DemoAgent(Agent):
-    """A basic agent using OpenAI API, to demonstrate BrowserGym's functionalities."""
+    """A basic agent using an OpenAI-compatible API (OpenAI, Gemini, Self-hosted)."""
 
     action_set = HighLevelActionSet(
-        subsets=["chat", "bid"],  # define a subset of the action space
-        # subsets=["chat", "bid", "coord"] # allow the agent to also use x,y coordinates
-        strict=False,  # less strict on the parsing of the actions
-        multiaction=True,  # enable to agent to take multiple actions at once
-        demo_mode="default",  # add visual effects
+        subsets=["chat", "bid"],
+        strict=False,
+        multiaction=True,
+        demo_mode="default",
     )
-    # use this instead to allow the agent to directly use Python code
-    # action_set = PythonActionSet())
 
     def obs_preprocessor(self, obs: dict) -> dict:
         return {
@@ -25,13 +23,16 @@ class DemoAgent(Agent):
             "axtree_txt": flatten_axtree_to_str(obs["axtree_object"]),
         }
 
-    def __init__(self, model_name) -> None:
+    def __init__(
+        self, model_name: str, base_url: str = None, api_key: str = None
+    ) -> None:
         super().__init__()
         self.model_name = model_name
 
         from openai import OpenAI
 
-        self.openai_client = OpenAI()
+        # Initialize the client with optional overrides for Gemini or self-hosted models
+        self.openai_client = OpenAI(base_url=base_url, api_key=api_key)
 
     def get_action(self, obs: dict) -> tuple[str, dict]:
         system_msg = f"""\
@@ -57,7 +58,7 @@ In order to accomplish my goal I need to click on the button with bid 12
 "
 """
 
-        # query OpenAI model
+        # query the model
         response = self.openai_client.chat.completions.create(
             model=self.model_name,
             messages=[
@@ -73,16 +74,24 @@ In order to accomplish my goal I need to click on the button with bid 12
 @dataclasses.dataclass
 class DemoAgentArgs(AbstractAgentArgs):
     """
-    This class is meant to store the arguments that define the agent.
-
-    By isolating them in a dataclass, this ensures serialization without storing
-    internal states of the agent.
+    Stores the arguments that define the agent.
     """
 
-    model_name: str = "gpt-3.5-turbo"
+    model_name: str = "gemini-2.0-flash"
+    base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: str = None
 
     def make_agent(self):
-        return DemoAgent(model_name=self.model_name)
+        # Fall back to GEMINI_API_KEY environment variable if not explicitly passed
+        key = (
+            self.api_key
+            or os.environ.get("GEMINI_API_KEY")
+            or os.environ.get("OPENAI_API_KEY")
+        )
+
+        return DemoAgent(
+            model_name=self.model_name, base_url=self.base_url, api_key=key
+        )
 
 
 def main():
@@ -93,11 +102,15 @@ def main():
     exp_root.mkdir(exist_ok=True)
 
     exp_args = ExpArgs(
-        agent_args=DemoAgentArgs(model_name="gpt-3.5-turbo"),
+        agent_args=DemoAgentArgs(
+            model_name="gemini-2.0-flash",
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=os.environ.get("GEMINI_API_KEY"),
+        ),
         env_args=EnvArgs(
             task_name="miniwob.click-test",
             task_seed=42,
-            headless=False,  # shows the browser
+            headless=False,
         ),
     )
 
@@ -109,3 +122,7 @@ def main():
 
     for key, val in exp_record.items():
         print(f"{key}: {val}")
+
+
+if __name__ == "__main__":
+    main()
