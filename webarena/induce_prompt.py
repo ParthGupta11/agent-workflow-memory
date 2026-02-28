@@ -105,7 +105,7 @@ def llm_generate(examples: list[dict], args, verbose: bool = False):
     if verbose:
         print("Prompt:\n", prompt, "\n\n")
     response = client.chat.completions.create(
-        model=args.model,
+        model=f"google/{args.model}" if "google/" not in args.model else args.model,
         messages=[{"role": "user", "content": prompt}],
         temperature=1.0,
         max_tokens=2048,

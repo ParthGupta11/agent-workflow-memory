@@ -201,7 +201,12 @@ WARNING this demo agent will soon be moved elsewhere. Expect it to be removed at
     exp_args.prepare(Path("./results"))
     exp_args.run()
 
-    os.rename(exp_args.exp_dir, f"results/{args.task_name}")
+    import shutil
+
+    target_dir = f"results/{args.task_name}"
+    if os.path.exists(target_dir):
+        shutil.rmtree(target_dir)
+    os.rename(exp_args.exp_dir, target_dir)
 
 
 if __name__ == "__main__":
