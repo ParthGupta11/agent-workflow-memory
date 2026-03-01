@@ -108,7 +108,7 @@ class ChatModelArgs:
 
     def has_vision(self):
         # TODO make sure to upgrade this as we add more models
-        name_patterns_with_vision = ["vision", "4o"]
+        name_patterns_with_vision = ["vision", "4o", "gemini"]
         return any(pattern in self.model_name for pattern in name_patterns_with_vision)
 
 
@@ -127,6 +127,7 @@ class VertexAIChatModel(SimpleChatModel):
         **kwargs: Any,
     ) -> str:
         import os
+        import base64
         import vertexai
         from vertexai.generative_models import (
             GenerativeModel,
@@ -141,15 +142,41 @@ class VertexAIChatModel(SimpleChatModel):
         location = os.environ.get("LOCATION", "us-central1")
         vertexai.init(project=project, location=location)
 
-        # 2. Parse Messages
+        # 2. Parse Multimodal Messages
         contents = []
         sys_instructions = []
         for msg in messages:
             if msg.type == "system":
-                sys_instructions.append(msg.content)
+                # Safely handle system messages if they are passed as lists
+                if isinstance(msg.content, list):
+                    text_parts = [p.get("text", "") for p in msg.content if isinstance(p, dict) and p.get("type") == "text"]
+                    sys_instructions.append(" ".join(text_parts))
+                else:
+                    sys_instructions.append(msg.content)
             else:
                 role = "user" if msg.type in ["human", "user"] else "model"
-                contents.append(Content(role=role, parts=[Part.from_text(msg.content)]))
+                parts = []
+                
+                # Handles Text-Only Mode
+                if isinstance(msg.content, str):
+                    parts.append(Part.from_text(msg.content))
+                    
+                # Handles Vision Mode (Text + Screenshots)
+                elif isinstance(msg.content, list):
+                    for item in msg.content:
+                        if isinstance(item, dict):
+                            if item.get("type") == "text":
+                                parts.append(Part.from_text(item["text"]))
+                            elif item.get("type") == "image_url":
+                                img_url = item["image_url"]["url"]
+                                if img_url.startswith("data:image"):
+                                    # Extract mime_type and decode base64 string
+                                    header, b64_data = img_url.split(",", 1)
+                                    mime_type = header.split(":")[1].split(";")[0]
+                                    img_bytes = base64.b64decode(b64_data)
+                                    parts.append(Part.from_data(data=img_bytes, mime_type=mime_type))
+                                
+                contents.append(Content(role=role, parts=parts))
 
         system_instruction = "\n".join(sys_instructions) if sys_instructions else None
 
@@ -175,6 +202,63 @@ class VertexAIChatModel(SimpleChatModel):
             safety_settings=safety_settings,
         )
         return response.text
+
+    # def _call(
+    #     self,
+    #     messages: List[BaseMessage],
+    #     stop: Optional[List[str]] = None,
+    #     run_manager: Optional[Any] = None,
+    #     **kwargs: Any,
+    # ) -> str:
+    #     import os
+    #     import vertexai
+    #     from vertexai.generative_models import (
+    #         GenerativeModel,
+    #         HarmCategory,
+    #         HarmBlockThreshold,
+    #         Content,
+    #         Part,
+    #     )
+
+    #     # 1. Initialize Native SDK
+    #     project = os.environ.get("PROJECT_ID", "awm-baseline")
+    #     location = os.environ.get("LOCATION", "us-central1")
+    #     vertexai.init(project=project, location=location)
+
+    #     # 2. Parse Messages
+    #     contents = []
+    #     sys_instructions = []
+    #     for msg in messages:
+    #         if msg.type == "system":
+    #             sys_instructions.append(msg.content)
+    #         else:
+    #             role = "user" if msg.type in ["human", "user"] else "model"
+    #             contents.append(Content(role=role, parts=[Part.from_text(msg.content)]))
+
+    #     system_instruction = "\n".join(sys_instructions) if sys_instructions else None
+
+    #     # 3. Load Model with Safety Disabled
+    #     model = GenerativeModel(
+    #         model_name=self.model_name.split("/")[-1],
+    #         system_instruction=system_instruction,
+    #     )
+    #     safety_settings = {
+    #         HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+    #         HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+    #         HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+    #         HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+    #     }
+
+    #     # 4. Generate
+    #     response = model.generate_content(
+    #         contents,
+    #         generation_config={
+    #             "temperature": self.temperature,
+    #             "max_output_tokens": self.max_new_tokens,
+    #         },
+    #         safety_settings=safety_settings,
+    #     )
+    #     return response.text
 
     def _llm_type(self) -> str:
         return "vertexai"
