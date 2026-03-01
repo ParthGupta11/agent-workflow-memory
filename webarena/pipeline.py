@@ -20,7 +20,8 @@ def main():
         process = Popen([
             "python", "run.py", 
             "--task", f"webarena.{tid}",
-            "--workflow_path", f"workflow/{args.website}.txt"
+            "--workflow_path", f"workflow/{args.website}.txt",
+            "--model_name", "google/gemini-2.5-pro"
         ])
         process.wait()
 
